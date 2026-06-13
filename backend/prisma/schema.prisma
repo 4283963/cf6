@@ -1,0 +1,118 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model Musician {
+  id           Int            @id @default(autoincrement())
+  name         String
+  studioName   String
+  avatar       String?
+  bio          String?
+  createdAt    DateTime       @default(now())
+  vinylRecords VinylRecord[]
+  works        CopyrightWork[]
+  revenueShares RevenueShare[]
+}
+
+model VinylRecord {
+  id           Int      @id @default(autoincrement())
+  title        String
+  coverImage   String?
+  description  String?
+  targetAmount Decimal  @db.Decimal(12, 2)
+  unitPrice    Decimal  @db.Decimal(10, 2)
+  currentAmount Decimal @db.Decimal(12, 2) @default(0)
+  status       String   @default("FUNDING")
+  deadline     DateTime?
+  musicianId   Int
+  musician     Musician  @relation(fields: [musicianId], references: [id])
+  orders       Order[]
+  work         CopyrightWork?
+  createdAt    DateTime  @default(now())
+}
+
+model Fan {
+  id        Int      @id @default(autoincrement())
+  nickname  String
+  phone     String?
+  email     String?
+  address   String?
+  orders    Order[]
+  createdAt DateTime @default(now())
+}
+
+model Order {
+  id            Int         @id @default(autoincrement())
+  orderNo       String      @unique
+  vinylRecordId Int
+  vinylRecord   VinylRecord @relation(fields: [vinylRecordId], references: [id])
+  fanId         Int
+  fan           Fan         @relation(fields: [fanId], references: [id])
+  quantity      Int
+  totalAmount   Decimal     @db.Decimal(12, 2)
+  status        String      @default("PAID")
+  createdAt     DateTime    @default(now())
+}
+
+model CopyrightWork {
+  id           Int             @id @default(autoincrement())
+  title        String
+  isrc         String?
+  duration     Int?
+  releaseDate  DateTime?
+  musicianId   Int
+  musician     Musician        @relation(fields: [musicianId], references: [id])
+  vinylRecordId Int?
+  vinylRecord  VinylRecord?    @relation(fields: [vinylRecordId], references: [id])
+  streams      StreamRevenue[]
+  shares       RevenueShare[]
+  createdAt    DateTime        @default(now())
+}
+
+enum RoleType {
+  LYRICIST
+  COMPOSER
+  ARRANGER
+  LEAD_VOCAL
+}
+
+model RevenueShare {
+  id          Int           @id @default(autoincrement())
+  workId      Int
+  work        CopyrightWork @relation(fields: [workId], references: [id])
+  musicianId  Int
+  musician    Musician      @relation(fields: [musicianId], references: [id])
+  role        RoleType
+  percentage  Decimal       @db.Decimal(5, 2)
+  amount      Decimal       @db.Decimal(12, 2) @default(0)
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+}
+
+enum PlatformType {
+  NETEASE
+  QQ_MUSIC
+  KUGOU
+  KUWO
+  BILIBILI
+  SPOTIFY
+  OTHER
+}
+
+model StreamRevenue {
+  id            Int           @id @default(autoincrement())
+  workId        Int
+  work          CopyrightWork @relation(fields: [workId], references: [id])
+  platform      PlatformType
+  playCount     BigInt        @default(0)
+  revenue       Decimal       @db.Decimal(12, 2) @default(0)
+  periodStart   DateTime
+  periodEnd     DateTime
+  settled       Boolean       @default(false)
+  createdAt     DateTime      @default(now())
+}
