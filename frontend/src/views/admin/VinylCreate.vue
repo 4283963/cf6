@@ -33,6 +33,13 @@
             <input class="form-input" type="number" v-model.number="form.unitPrice" min="1" step="0.01" placeholder="299" required />
           </div>
           <div class="form-group">
+            <label class="form-label">
+              限量库存 (张)
+              <span class="label-tip">0 表示不限量</span>
+            </label>
+            <input class="form-input" type="number" v-model.number="form.initialStock" min="0" step="1" placeholder="500" />
+          </div>
+          <div class="form-group">
             <label class="form-label">截止日期</label>
             <input class="form-input" type="date" v-model="form.deadline" />
           </div>
@@ -120,6 +127,7 @@ const form = reactive({
   description: '',
   targetAmount: null,
   unitPrice: null,
+  initialStock: 500,
   deadline: '',
   musicianId: '',
   coverImage: '',
@@ -176,6 +184,7 @@ const handleSubmit = async () => {
       description: form.description,
       targetAmount: form.targetAmount,
       unitPrice: form.unitPrice,
+      initialStock: Number.isFinite(form.initialStock) ? form.initialStock : 0,
       deadline: form.deadline || null,
       musicianId: parseInt(form.musicianId),
       coverImage: form.coverImage || null,
@@ -265,5 +274,12 @@ onMounted(() => {
   margin-top: 32px;
   padding-top: 24px;
   border-top: 1px dashed var(--color-border);
+}
+
+.label-tip {
+  font-size: 11px;
+  color: var(--color-muted);
+  font-weight: 400;
+  margin-left: 4px;
 }
 </style>

@@ -27,6 +27,9 @@ model VinylRecord {
   targetAmount Decimal  @db.Decimal(12, 2)
   unitPrice    Decimal  @db.Decimal(10, 2)
   currentAmount Decimal @db.Decimal(12, 2) @default(0)
+  initialStock Int      @default(0)
+  stock        Int      @default(0)
+  version      Int      @default(0)
   status       String   @default("FUNDING")
   deadline     DateTime?
   musicianId   Int
@@ -34,6 +37,8 @@ model VinylRecord {
   orders       Order[]
   work         CopyrightWork?
   createdAt    DateTime  @default(now())
+
+  @@index([status])
 }
 
 model Fan {

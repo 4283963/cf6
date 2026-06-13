@@ -60,6 +60,9 @@ async function main() {
       targetAmount: 100000,
       unitPrice: 299,
       currentAmount: 35880,
+      initialStock: 500,
+      stock: 497,
+      version: 0,
       status: 'FUNDING',
       deadline: new Date(Date.now() + 30 * 24 * 3600 * 1000),
       musicianId: m2.id
@@ -76,6 +79,9 @@ async function main() {
       targetAmount: 80000,
       unitPrice: 368,
       currentAmount: 82368,
+      initialStock: 300,
+      stock: 299,
+      version: 0,
       status: 'SUCCESS',
       deadline: new Date(Date.now() + 10 * 24 * 3600 * 1000),
       musicianId: m4.id

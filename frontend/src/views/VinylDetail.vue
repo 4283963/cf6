@@ -40,15 +40,51 @@
             class="mt-24"
           />
 
+          <div class="stock-info" v-if="typeof detail.stock === 'number'">
+            <span :class="['stock-tag', stockLevel]">
+              <span class="stock-icon">{{ stockIcon }}</span>
+              <span>限量发行 {{ detail.initialStock || detail.stock }} 张</span>
+              <span class="stock-divider">·</span>
+              <span class="stock-remain">
+                剩余 <strong>{{ detail.stock }}</strong> 张
+              </span>
+              <span
+                v-if="detail.initialStock > 0"
+                class="stock-progress-wrapper">
+                <span class="stock-progress-bar">
+                  <span
+                    class="stock-progress-inner"
+                    :style="{ width: stockPercent + '%' }"></span>
+                </span>
+              </span>
+            </span>
+            <span class="stock-warn" v-if="detail.stock > 0 && detail.stock <= 10">
+              ⚠️ 库存紧张，仅剩 {{ detail.stock }} 张，拼手速！
+            </span>
+          </div>
+
           <div class="buy-section">
             <div class="buy-price">
               <span class="price-label">单价</span>
               <span class="price-value">¥{{ formatNumber(detail.unitPrice) }}</span>
             </div>
             <div class="buy-qty">
-              <button class="qty-btn" @click="quantity = Math.max(1, quantity - 1)">−</button>
-              <input class="qty-input" type="number" v-model.number="quantity" min="1" />
-              <button class="qty-btn" @click="quantity++">+</button>
+              <button
+                class="qty-btn"
+                :disabled="quantity <= 1"
+                @click="quantity = Math.max(1, quantity - 1)">−</button>
+              <input
+                class="qty-input"
+                type="number"
+                v-model.number="quantity"
+                :min="1"
+                :max="maxBuyQty"
+                @change="clampQty"
+              />
+              <button
+                class="qty-btn"
+                :disabled="detail.stock != null && quantity >= maxBuyQty"
+                @click="incrementQty">+</button>
             </div>
             <div class="buy-total">
               <span class="total-label">合计</span>
@@ -56,10 +92,13 @@
             </div>
             <button
               class="btn btn-gold btn-block"
-              :disabled="submitting || detail.status !== 'FUNDING'"
+              :disabled="buyBtnDisabled"
               @click="handleBuy"
             >
-              {{ submitting ? '下单中...' : detail.status === 'FUNDING' ? '立即支持' : '众筹已结束' }}
+              <template v-if="submitting">
+                <span class="btn-spinner"></span>
+              </template>
+              <template v-else>{{ buyBtnText }}</template>
             </button>
           </div>
 
@@ -109,7 +148,7 @@
 </template>
 
 <script setup>
-import { onMounted, ref, computed } from 'vue';
+import { onMounted, ref, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { vinylApi, orderApi, useToast } from '@/api';
 import FundingProgressBar from '@/components/FundingProgressBar.vue';
@@ -121,12 +160,70 @@ const loading = ref(true);
 const detail = ref(null);
 const quantity = ref(1);
 const submitting = ref(false);
+const errorTip = ref('');
 
 const daysLeft = computed(() => {
   if (!detail.value?.deadline) return 0;
   const d = new Date(detail.value.deadline).getTime() - Date.now();
   return Math.max(0, Math.ceil(d / (24 * 3600 * 1000)));
 });
+
+const maxBuyQty = computed(() => {
+  const stock = detail.value?.stock;
+  if (stock == null) return 999;
+  return Math.max(0, stock);
+});
+
+const stockPercent = computed(() => {
+  const d = detail.value;
+  if (!d || !(d.initialStock > 0)) return 0;
+  return Math.max(0, Math.round(((d.initialStock - d.stock) / d.initialStock) * 100));
+});
+
+const stockLevel = computed(() => {
+  const d = detail.value;
+  if (!d) return '';
+  const remain = d.stock ?? 9999;
+  if (remain <= 0) return 'stock-out';
+  if (d.initialStock && remain / d.initialStock <= 0.1) return 'stock-urgent';
+  if (d.initialStock && remain / d.initialStock <= 0.3) return 'stock-tight';
+  return 'stock-normal';
+});
+
+const stockIcon = computed(() => {
+  const d = detail.value;
+  if (!d) return '🎯';
+  if (d.stock <= 0) return '🚫';
+  if (stockLevel.value === 'stock-urgent') return '🔥';
+  if (stockLevel.value === 'stock-tight') return '⏳';
+  return '✅';
+});
+
+const buyBtnDisabled = computed(() => {
+  const d = detail.value;
+  if (submitting.value) return true;
+  if (!d) return true;
+  if (d.status !== 'FUNDING') return true;
+  if (d.stock != null && d.stock <= 0) return true;
+  if (quantity.value < 1) return true;
+  return false;
+});
+
+const buyBtnText = computed(() => {
+  const d = detail.value;
+  if (submitting.value) return '下单中...';
+  if (!d) return '';
+  if (d.status === 'SUCCESS') return '众筹已结束';
+  if (d.stock != null && d.stock <= 0) return '已售罄';
+  if (d.status !== 'FUNDING') return '不可购买';
+  return '立即支持';
+});
+
+watch(() => detail.value, (d) => {
+  if (d && quantity.value > maxBuyQty.value && maxBuyQty.value > 0) {
+    quantity.value = maxBuyQty.value;
+  }
+}, { immediate: true });
 
 const formatNumber = (num) => {
   const n = parseFloat(num) || 0;
@@ -144,11 +241,31 @@ const roleLabel = (r) => {
   return { LYRICIST: '作词', COMPOSER: '作曲', ARRANGER: '编曲', LEAD_VOCAL: '主唱' }[r] || r;
 };
 
+const clampQty = () => {
+  const q = parseInt(quantity.value);
+  if (q == null || Number.isNaN(q) || q < 1) {
+    quantity.value = 1;
+  }
+  if (maxBuyQty.value > 0 && quantity.value > maxBuyQty.value) {
+    quantity.value = maxBuyQty.value;
+    toast.show(`最多只能购买 ${maxBuyQty.value} 张`, 'warn');
+  }
+};
+
+const incrementQty = () => {
+  if (maxBuyQty.value > 0 && quantity.value >= maxBuyQty.value) {
+    toast.show(`库存仅剩 ${maxBuyQty.value} 张，无法再多啦！`, 'warn');
+    return;
+  }
+  quantity.value += 1;
+};
+
 const fetchDetail = async () => {
   try {
     const res = await vinylApi.detail(route.params.id);
     if (res.success) {
       detail.value = res.data;
+      errorTip.value = '';
     }
   } catch (e) {
     toast.show(e.message || '加载失败', 'error');
@@ -159,6 +276,14 @@ const fetchDetail = async () => {
 
 const handleBuy = async () => {
   if (submitting.value) return;
+  if (quantity.value < 1) {
+    toast.show('请输入有效数量', 'warn');
+    return;
+  }
+  if (maxBuyQty.value > 0 && quantity.value > maxBuyQty.value) {
+    toast.show(`库存仅剩 ${maxBuyQty.value} 张，请减少购买数量`, 'warn');
+    return;
+  }
   submitting.value = true;
   try {
     const res = await orderApi.create({
@@ -170,14 +295,23 @@ const handleBuy = async () => {
       address: ''
     });
     if (res.success) {
-      toast.show('支持成功！感谢您的参与 💿', 'success');
+      toast.show(`支持成功！感谢您的参与 💿 订单号: ${res.data.order.orderNo}`, 'success');
       quantity.value = 1;
       fetchDetail();
     } else {
-      toast.show(res.message || '下单失败', 'error');
+      const code = res.code;
+      if (code === 'STOCK_INSUFFICIENT' || code === 'STOCK_RACE_FAIL') {
+        toast.show(res.message || '库存不足', 'error');
+        fetchDetail();
+      } else if (code === 'VERSION_CONFLICT' || code === 'DEADLOCK_FAIL') {
+        toast.show(res.message || '系统繁忙，请稍后重试', 'error');
+        setTimeout(() => fetchDetail(), 800);
+      } else {
+        toast.show(res.message || '下单失败', 'error');
+      }
     }
   } catch (e) {
-    toast.show(e.message || '下单失败', 'error');
+    toast.show(e.message || '下单失败，请稍后重试', 'error');
   } finally {
     submitting.value = false;
   }
@@ -441,6 +575,121 @@ onMounted(() => {
   white-space: pre-wrap;
 }
 
+.stock-info {
+  margin-top: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.stock-tag {
+  display: inline-flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  font-weight: 500;
+  background: var(--color-card);
+  border: 1px solid var(--color-border);
+  width: fit-content;
+  max-width: 100%;
+}
+
+.stock-tag.stock-normal {
+  background: rgba(16, 185, 129, 0.08);
+  border-color: rgba(16, 185, 129, 0.25);
+  color: #065f46;
+}
+
+.stock-tag.stock-tight {
+  background: rgba(245, 158, 11, 0.1);
+  border-color: rgba(245, 158, 11, 0.3);
+  color: #92400e;
+}
+
+.stock-tag.stock-urgent {
+  background: rgba(239, 68, 68, 0.08);
+  border-color: rgba(239, 68, 68, 0.3);
+  color: #991b1b;
+  animation: urgent-pulse 2s ease-in-out infinite;
+}
+
+.stock-tag.stock-out {
+  background: rgba(107, 114, 128, 0.1);
+  border-color: rgba(107, 114, 128, 0.3);
+  color: #374151;
+}
+
+@keyframes urgent-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.35); }
+  50% { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+}
+
+.stock-icon {
+  font-size: 15px;
+}
+
+.stock-divider {
+  color: inherit;
+  opacity: 0.35;
+}
+
+.stock-remain strong {
+  color: inherit;
+  font-weight: 700;
+  font-size: 14px;
+}
+
+.stock-progress-wrapper {
+  display: inline-flex;
+  align-items: center;
+}
+
+.stock-progress-bar {
+  width: 100px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+}
+
+.stock-progress-inner {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #10b981 0%, #d4af37 60%, #e94560 100%);
+  transition: width 0.4s ease;
+}
+
+.stock-warn {
+  font-size: 12px;
+  color: var(--color-accent);
+  font-weight: 500;
+}
+
+.qty-btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.5);
+  border-top-color: #fff;
+  border-radius: 50%;
+  margin-right: 6px;
+  vertical-align: -3px;
+  animation: spin 0.7s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 @media (max-width: 900px) {
   .detail-grid {
     grid-template-columns: 1fr;
@@ -451,5 +700,6 @@ onMounted(() => {
   .buy-section {
     grid-template-columns: 1fr;
   }
+  .stock-progress-bar { width: 72px; }
 }
 </style>

@@ -2,7 +2,7 @@ const prisma = require('../utils/prisma');
 
 async function createVinylRecord(req, res, next) {
   try {
-    const { title, coverImage, description, targetAmount, unitPrice, deadline, musicianId, workInfo, shares } = req.body;
+    const { title, coverImage, description, targetAmount, unitPrice, initialStock, deadline, musicianId, workInfo, shares } = req.body;
 
     if (!title || !targetAmount || !unitPrice || !musicianId) {
       return res.status(400).json({
@@ -12,6 +12,7 @@ async function createVinylRecord(req, res, next) {
       });
     }
 
+    const parsedStock = parseInt(initialStock);
     const result = await prisma.$transaction(async (tx) => {
       const vinyl = await tx.vinylRecord.create({
         data: {
@@ -20,6 +21,8 @@ async function createVinylRecord(req, res, next) {
           description,
           targetAmount: parseFloat(targetAmount),
           unitPrice: parseFloat(unitPrice),
+          initialStock: Number.isFinite(parsedStock) && parsedStock > 0 ? parsedStock : 0,
+          stock: Number.isFinite(parsedStock) && parsedStock > 0 ? parsedStock : 0,
           deadline: deadline ? new Date(deadline) : null,
           musicianId: parseInt(musicianId)
         }
