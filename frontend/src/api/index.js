@@ -41,7 +41,18 @@ export const vinylApi = {
 
 export const orderApi = {
   list: (params) => api.get('/orders', { params }),
-  create: (data) => api.post('/orders', data)
+  create: (data) => api.post('/orders', data),
+  getEngravingNumbers: (vinylRecordId) => api.get(`/orders/engraving/${vinylRecordId}`),
+  lockEngravingNumber: (data) => api.post('/orders/engraving/lock', data)
+};
+
+export const benefitApi = {
+  list: (params) => api.get('/benefits', { params }),
+  listByVinyl: (vinylRecordId) => api.get(`/benefits/vinyl/${vinylRecordId}`),
+  listByOrder: (orderId) => api.get(`/benefits/order/${orderId}`),
+  create: (data) => api.post('/benefits', data),
+  update: (id, data) => api.put(`/benefits/${id}`, data),
+  remove: (id) => api.delete(`/benefits/${id}`)
 };
 
 export const revenueApi = {

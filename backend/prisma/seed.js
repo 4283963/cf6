@@ -160,13 +160,29 @@ async function main() {
   await prisma.order.deleteMany({});
   await prisma.order.createMany({
     data: [
-      { orderNo: 'VNY20260601ABC001', vinylRecordId: vinyl1.id, fanId: fan1.id, quantity: 2, totalAmount: 598, status: 'PAID' },
-      { orderNo: 'VNY20260601ABC002', vinylRecordId: vinyl1.id, fanId: fan1.id, quantity: 1, totalAmount: 299, status: 'PAID' },
-      { orderNo: 'VNY20260601ABC003', vinylRecordId: vinyl2.id, fanId: fan1.id, quantity: 1, totalAmount: 368, status: 'PAID' }
+      { orderNo: 'VNY20260601ABC001', vinylRecordId: vinyl1.id, fanId: fan1.id, quantity: 2, totalAmount: 598, engravingNumber: 66, status: 'PAID' },
+      { orderNo: 'VNY20260601ABC002', vinylRecordId: vinyl1.id, fanId: fan1.id, quantity: 1, totalAmount: 299, engravingNumber: 188, status: 'PAID' },
+      { orderNo: 'VNY20260601ABC003', vinylRecordId: vinyl2.id, fanId: fan1.id, quantity: 1, totalAmount: 368, engravingNumber: 99, status: 'PAID' }
     ]
   });
 
   console.log('✅ 粉丝与订单数据初始化完成');
+
+  await prisma.vinylBenefit.deleteMany({});
+  await prisma.vinylBenefit.createMany({
+    data: [
+      { vinylRecordId: vinyl1.id, title: '数字专辑无损 FLAC 下载', type: 'DOWNLOAD_LINK', thresholdPercent: 10, contentUrl: 'https://example.com/vinyl/晴天/flac', description: '24bit/96kHz 无损音质，包含所有曲目', sortOrder: 1, unlocked: true, unlockedAt: new Date() },
+      { vinylRecordId: vinyl1.id, title: '高清伴奏带 (Instrumental)', type: 'DOWNLOAD_LINK', thresholdPercent: 50, contentUrl: 'https://example.com/vinyl/晴天/instrumental', description: 'WAV 格式所有曲目的纯伴奏版本，可用于翻唱/Remix', sortOrder: 2, unlocked: false },
+      { vinylRecordId: vinyl1.id, title: '独家创作手记 PDF', type: 'LYRIC_SHEET', thresholdPercent: 75, contentUrl: 'https://example.com/vinyl/晴天/notes', contentText: '创作手记：这首歌写于2003年一个下雨的午后...', description: '包含手写乐谱与创作故事', sortOrder: 3, unlocked: false },
+      { vinylRecordId: vinyl1.id, title: '录音室花絮视频', type: 'BEHIND_SCENES', thresholdPercent: 90, contentUrl: 'https://example.com/vinyl/晴天/bts', description: '4K 未公开的录音室幕后花絮，15 分钟', sortOrder: 4, unlocked: false },
+      { vinylRecordId: vinyl1.id, title: '全套解锁 · 实体周边礼', type: 'PHYSICAL_GIFT', thresholdPercent: 100, contentText: '实体海报 + 明信片套装，将随黑胶一同寄出', description: '亲笔签名海报、明信片 x5、定制保护袋', sortOrder: 5, unlocked: false },
+      { vinylRecordId: vinyl2.id, title: '《温柔》2025 Remaster 下载', type: 'DOWNLOAD_LINK', thresholdPercent: 10, contentUrl: 'https://example.com/vinyl/温柔/remaster', sortOrder: 1, unlocked: true, unlockedAt: new Date() },
+      { vinylRecordId: vinyl2.id, title: '演唱会现场 Live 录音', type: 'DOWNLOAD_LINK', thresholdPercent: 50, contentUrl: 'https://example.com/vinyl/温柔/live', sortOrder: 2, unlocked: true, unlockedAt: new Date() },
+      { vinylRecordId: vinyl2.id, title: '五月天乐手分轨工程文件', type: 'DOWNLOAD_LINK', thresholdPercent: 100, contentUrl: 'https://example.com/vinyl/温柔/stems', description: '包含吉他/Bass/鼓/人声分轨', sortOrder: 3, unlocked: false }
+    ]
+  });
+
+  console.log('✅ 阶梯福利数据初始化完成');
   console.log('🎉 所有种子数据初始化完成!');
 }
 

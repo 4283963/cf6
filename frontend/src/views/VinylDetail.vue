@@ -112,6 +112,46 @@
               </div>
             </div>
           </div>
+
+          <div v-if="benefits.length" class="benefits-preview mt-24">
+            <div class="benefits-header">
+              <h3 class="benefits-title">🎁 众筹阶梯福利</h3>
+              <span class="benefits-sub">
+                已解锁 <b>{{ unlockedCount }}</b> / {{ benefits.length }}
+              </span>
+            </div>
+            <div class="benefits-list">
+              <div
+                v-for="(b, idx) in benefits"
+                :key="b.id"
+                :class="['benefit-card', b.isUnlocked ? 'unlocked' : 'locked']"
+              >
+                <div class="benefit-threshold">
+                  <div class="threshold-pct">{{ b.thresholdPercent }}%</div>
+                  <div class="threshold-line" v-if="idx < benefits.length - 1"></div>
+                </div>
+                <div class="benefit-body">
+                  <div class="benefit-top">
+                    <span class="benefit-icon">{{ benefitIcon(b.type) }}</span>
+                    <span class="benefit-title">{{ b.title }}</span>
+                    <span :class="['benefit-state', b.isUnlocked ? 'state-unlocked' : 'state-locked']">
+                      {{ b.isUnlocked ? '✅ 已解锁' : '🔒 未解锁' }}
+                    </span>
+                  </div>
+                  <p v-if="b.description" class="benefit-desc">{{ b.description }}</p>
+                  <div v-if="b.isUnlocked && (b.contentUrl || b.contentText)" class="benefit-content">
+                    <a v-if="b.contentUrl" :href="b.contentUrl" target="_blank" class="benefit-link">
+                      📎 点击领取 / 下载
+                    </a>
+                    <p v-if="b.contentText" class="benefit-text">{{ b.contentText }}</p>
+                  </div>
+                  <div v-else-if="!b.isUnlocked" class="benefit-hint">
+                    众筹进度达到 <b>{{ b.thresholdPercent }}%</b> 后解锁，立即下单加速解锁吧！
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -144,14 +184,24 @@
         </table>
       </div>
     </div>
+
+    <EngravingWheel
+      :visible="wheelVisible"
+      :vinylRecordId="detail?.id"
+      :orderId="lastOrder?.id"
+      :orderEngravingNumber="lastOrder?.engravingNumber"
+      @close="wheelVisible = false"
+      @locked="onEngravingLocked"
+    />
   </div>
 </template>
 
 <script setup>
 import { onMounted, ref, computed, watch } from 'vue';
 import { useRoute } from 'vue-router';
-import { vinylApi, orderApi, useToast } from '@/api';
+import { vinylApi, orderApi, benefitApi, useToast } from '@/api';
 import FundingProgressBar from '@/components/FundingProgressBar.vue';
+import EngravingWheel from '@/components/EngravingWheel.vue';
 
 const route = useRoute();
 const toast = useToast();
@@ -161,6 +211,22 @@ const detail = ref(null);
 const quantity = ref(1);
 const submitting = ref(false);
 const errorTip = ref('');
+const benefits = ref([]);
+const wheelVisible = ref(false);
+const lastOrder = ref(null);
+
+const unlockedCount = computed(() => benefits.value.filter(b => b.isUnlocked).length);
+
+const benefitIcon = (type) => {
+  return {
+    DOWNLOAD_LINK: '💾',
+    LYRIC_SHEET: '📜',
+    BEHIND_SCENES: '🎬',
+    EARLY_ACCESS: '⏰',
+    PHYSICAL_GIFT: '🎁',
+    OTHER: '✨'
+  }[type] || '🎁';
+};
 
 const daysLeft = computed(() => {
   if (!detail.value?.deadline) return 0;
@@ -266,11 +332,29 @@ const fetchDetail = async () => {
     if (res.success) {
       detail.value = res.data;
       errorTip.value = '';
+      fetchBenefits();
     }
   } catch (e) {
     toast.show(e.message || '加载失败', 'error');
   } finally {
     loading.value = false;
+  }
+};
+
+const fetchBenefits = async () => {
+  try {
+    const res = await benefitApi.listByVinyl(route.params.id);
+    if (res.success) {
+      benefits.value = res.data || [];
+    }
+  } catch (e) {
+    console.error('获取福利失败', e);
+  }
+};
+
+const onEngravingLocked = (data) => {
+  if (lastOrder.value) {
+    lastOrder.value = { ...lastOrder.value, engravingNumber: data?.engravingNumber };
   }
 };
 
@@ -297,7 +381,19 @@ const handleBuy = async () => {
     if (res.success) {
       toast.show(`支持成功！感谢您的参与 💿 订单号: ${res.data.order.orderNo}`, 'success');
       quantity.value = 1;
+      lastOrder.value = res.data.order;
       fetchDetail();
+
+      const newly = res.data.newlyUnlockedBenefits || [];
+      if (newly.length > 0) {
+        setTimeout(() => {
+          toast.show(`🎉 恭喜！新解锁 ${newly.length} 项福利：${newly.map(b => b.title).join('、')}`, 'success');
+        }, 800);
+      }
+
+      setTimeout(() => {
+        wheelVisible.value = true;
+      }, newly.length > 0 ? 1600 : 600);
     } else {
       const code = res.code;
       if (code === 'STOCK_INSUFFICIENT' || code === 'STOCK_RACE_FAIL') {
@@ -689,6 +785,157 @@ onMounted(() => {
 @keyframes spin {
   to { transform: rotate(360deg); }
 }
+
+.benefits-preview {
+  padding: 22px;
+  background: linear-gradient(135deg, #fff 0%, #fafaf7 100%);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+}
+.benefits-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 16px;
+}
+.benefits-title {
+  font-size: 17px;
+  font-weight: 700;
+  color: var(--color-primary);
+  margin: 0;
+}
+.benefits-sub {
+  font-size: 13px;
+  color: var(--color-muted);
+}
+.benefits-sub b { color: var(--color-accent); font-weight: 700; }
+
+.benefits-list {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  position: relative;
+}
+
+.benefit-card {
+  display: grid;
+  grid-template-columns: 70px 1fr;
+  gap: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--color-border);
+  background: #fff;
+  transition: all 0.25s ease;
+}
+.benefit-card.unlocked {
+  background: linear-gradient(135deg, rgba(16, 185, 129, 0.06) 0%, rgba(212, 175, 55, 0.08) 100%);
+  border-color: rgba(212, 175, 55, 0.35);
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.1);
+}
+.benefit-card.locked {
+  opacity: 0.7;
+  background: #f9fafb;
+}
+
+.benefit-threshold {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+.threshold-pct {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  font-weight: 800;
+  background: linear-gradient(135deg, #d4af37, #e94560);
+  color: #fff;
+  box-shadow: 0 4px 12px rgba(212, 175, 55, 0.35);
+  z-index: 2;
+}
+.benefit-card.locked .threshold-pct {
+  background: #e5e7eb;
+  color: #6b7280;
+  box-shadow: none;
+}
+.threshold-line {
+  position: absolute;
+  top: 58px;
+  width: 3px;
+  height: calc(100% + 14px);
+  background: linear-gradient(180deg, #d4af37 0%, #e5e7eb 100%);
+  border-radius: 2px;
+  z-index: 1;
+}
+.benefit-card.locked .threshold-line { background: #e5e7eb; }
+
+.benefit-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+  flex-wrap: wrap;
+}
+.benefit-icon { font-size: 18px; }
+.benefit-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--color-primary);
+  flex: 1;
+}
+.benefit-state {
+  font-size: 12px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+.state-unlocked {
+  background: rgba(16, 185, 129, 0.15);
+  color: #059669;
+}
+.state-locked {
+  background: rgba(107, 114, 128, 0.15);
+  color: #4b5563;
+}
+.benefit-desc {
+  font-size: 13px;
+  color: var(--color-muted);
+  margin: 0 0 8px;
+  line-height: 1.6;
+}
+.benefit-content {
+  margin-top: 4px;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.7);
+  border-radius: 8px;
+}
+.benefit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--color-accent);
+  text-decoration: none;
+  padding: 4px 0;
+}
+.benefit-link:hover { text-decoration: underline; }
+.benefit-text {
+  margin: 6px 0 0;
+  font-size: 12px;
+  color: var(--color-text);
+  line-height: 1.6;
+}
+.benefit-hint {
+  font-size: 12px;
+  color: var(--color-muted);
+  margin-top: 4px;
+}
+.benefit-hint b { color: var(--color-gold); font-weight: 700; }
 
 @media (max-width: 900px) {
   .detail-grid {

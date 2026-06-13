@@ -7,6 +7,7 @@ const vinylRoutes = require('./routes/vinyl');
 const orderRoutes = require('./routes/order');
 const revenueRoutes = require('./routes/revenue');
 const musicianRoutes = require('./routes/musician');
+const benefitRoutes = require('./routes/benefit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -25,6 +26,7 @@ app.use('/api/vinyl', vinylRoutes);
 app.use('/api/orders', orderRoutes);
 app.use('/api/revenue', revenueRoutes);
 app.use('/api/musicians', musicianRoutes);
+app.use('/api/benefits', benefitRoutes);
 
 app.use((err, _req, res, _next) => {
   console.error('[SERVER ERROR]', err);

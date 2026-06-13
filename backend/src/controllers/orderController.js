@@ -1,5 +1,6 @@
 const prisma = require('../utils/prisma');
 const { Prisma } = require('@prisma/client');
+const benefitUnlockService = require('../services/benefitUnlockService');
 
 function generateOrderNo() {
   const date = new Date();
@@ -254,10 +255,25 @@ async function createOrder(req, res, next) {
       address
     });
 
+    let benefitResult = { unlocked: [], totalUnlocked: 0 };
+    try {
+      benefitResult = await benefitUnlockService.checkAndUnlockBenefits(
+        parseInt(vinylRecordId)
+      );
+    } catch (benefitErr) {
+      console.error('[福利解锁失败] 不影响订单流程', benefitErr.message);
+    }
+
     res.json({
       success: true,
-      message: '下单成功',
-      data: result
+      message: benefitResult.totalUnlocked > 0
+        ? `下单成功！同时解锁 ${benefitResult.totalUnlocked} 项新福利 🎁`
+        : '下单成功',
+      data: {
+        ...result,
+        newlyUnlockedBenefits: benefitResult.unlocked,
+        progressPercent: benefitResult.progressPercent || 0
+      }
     });
   } catch (err) {
     if (err instanceof StockInsufficientError) {
@@ -328,7 +344,130 @@ async function listOrders(req, res, next) {
   }
 }
 
+async function getEngravingNumbers(req, res, next) {
+  try {
+    const { vinylRecordId } = req.params;
+    if (!vinylRecordId) {
+      return res.status(400).json({ success: false, message: '缺少 vinylRecordId', data: null });
+    }
+
+    const occupied = await prisma.order.findMany({
+      where: {
+        vinylRecordId: parseInt(vinylRecordId),
+        engravingNumber: { not: null }
+      },
+      select: { engravingNumber: true, orderNo: true }
+    });
+
+    const numbers = occupied
+      .filter(o => o.engravingNumber != null)
+      .map(o => o.engravingNumber);
+
+    res.json({
+      success: true,
+      message: '获取成功',
+      data: {
+        occupied: numbers,
+        total: numbers.length,
+        maxNumber: 500,
+        available: 500 - numbers.length
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+async function lockEngravingNumber(req, res, next) {
+  try {
+    const { orderId, engravingNumber } = req.body;
+
+    if (!orderId || engravingNumber == null) {
+      return res.status(400).json({
+        success: false,
+        message: '缺少必填参数：orderId、engravingNumber',
+        data: null
+      });
+    }
+
+    const num = parseInt(engravingNumber);
+    if (!Number.isInteger(num) || num < 1 || num > 500) {
+      return res.status(400).json({
+        success: false,
+        message: '刻字编号必须在 1 到 500 之间',
+        data: null
+      });
+    }
+
+    const order = await prisma.order.findUnique({
+      where: { id: parseInt(orderId) },
+      select: { id: true, vinylRecordId: true, engravingNumber: true }
+    });
+
+    if (!order) {
+      return res.status(404).json({
+        success: false,
+        message: '订单不存在',
+        data: null
+      });
+    }
+
+    if (order.engravingNumber != null) {
+      return res.status(409).json({
+        success: false,
+        message: `您已锁定专属编号 ${order.engravingNumber.toString().padStart(3, '0')}，无法重复选择`,
+        code: 'ENGRAVING_ALREADY_SET',
+        data: { currentNumber: order.engravingNumber }
+      });
+    }
+
+    const existing = await prisma.order.findFirst({
+      where: {
+        vinylRecordId: order.vinylRecordId,
+        engravingNumber: num,
+        id: { not: order.id }
+      }
+    });
+
+    if (existing) {
+      return res.status(409).json({
+        success: false,
+        message: `编号 ${num.toString().padStart(3, '0')} 已被其他乐迷抢先锁定，换一个试试吧！`,
+        code: 'ENGRAVING_OCCUPIED',
+        data: { requestedNumber: num }
+      });
+    }
+
+    const updated = await prisma.order.update({
+      where: { id: order.id },
+      data: { engravingNumber: num }
+    });
+
+    res.json({
+      success: true,
+      message: `🎉 专属编号 ${num.toString().padStart(3, '0')} 锁定成功！将刻在您的黑胶唱片上`,
+      data: {
+        orderId: updated.id,
+        engravingNumber: num,
+        engravingNumberDisplay: num.toString().padStart(3, '0')
+      }
+    });
+  } catch (err) {
+    if (err.code === 'P2002') {
+      return res.status(409).json({
+        success: false,
+        message: '该编号已被抢占，换一个试试！',
+        code: 'ENGRAVING_OCCUPIED',
+        data: null
+      });
+    }
+    next(err);
+  }
+}
+
 module.exports = {
   createOrder,
-  listOrders
+  listOrders,
+  getEngravingNumbers,
+  lockEngravingNumber
 };

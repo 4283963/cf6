@@ -36,6 +36,7 @@ model VinylRecord {
   musician     Musician  @relation(fields: [musicianId], references: [id])
   orders       Order[]
   work         CopyrightWork?
+  benefits     VinylBenefit[]
   createdAt    DateTime  @default(now())
 
   @@index([status])
@@ -52,16 +53,20 @@ model Fan {
 }
 
 model Order {
-  id            Int         @id @default(autoincrement())
-  orderNo       String      @unique
-  vinylRecordId Int
-  vinylRecord   VinylRecord @relation(fields: [vinylRecordId], references: [id])
-  fanId         Int
-  fan           Fan         @relation(fields: [fanId], references: [id])
-  quantity      Int
-  totalAmount   Decimal     @db.Decimal(12, 2)
-  status        String      @default("PAID")
-  createdAt     DateTime    @default(now())
+  id              Int         @id @default(autoincrement())
+  orderNo         String      @unique
+  vinylRecordId   Int
+  vinylRecord     VinylRecord @relation(fields: [vinylRecordId], references: [id])
+  fanId           Int
+  fan             Fan         @relation(fields: [fanId], references: [id])
+  quantity        Int
+  totalAmount     Decimal     @db.Decimal(12, 2)
+  engravingNumber Int?
+  status          String      @default("PAID")
+  createdAt       DateTime    @default(now())
+
+  @@unique([vinylRecordId, engravingNumber], map: "idx_vinyl_engraving_unique")
+  @@index([engravingNumber])
 }
 
 model CopyrightWork {
@@ -120,4 +125,33 @@ model StreamRevenue {
   periodEnd     DateTime
   settled       Boolean       @default(false)
   createdAt     DateTime      @default(now())
+}
+
+enum BenefitType {
+  DOWNLOAD_LINK
+  LYRIC_SHEET
+  BEHIND_SCENES
+  EARLY_ACCESS
+  PHYSICAL_GIFT
+  OTHER
+}
+
+model VinylBenefit {
+  id              Int           @id @default(autoincrement())
+  vinylRecordId   Int
+  vinylRecord     VinylRecord   @relation(fields: [vinylRecordId], references: [id])
+  title           String
+  description     String?
+  type            BenefitType   @default(DOWNLOAD_LINK)
+  thresholdPercent Decimal     @db.Decimal(5, 2)
+  contentUrl      String?
+  contentText     String?
+  unlocked        Boolean       @default(false)
+  unlockedAt      DateTime?
+  sortOrder       Int           @default(0)
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([vinylRecordId, thresholdPercent])
+  @@index([unlocked])
 }

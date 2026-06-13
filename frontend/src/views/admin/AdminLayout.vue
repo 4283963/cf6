@@ -13,6 +13,7 @@
         <router-link to="/admin/vinyl">💿 黑胶项目</router-link>
         <router-link to="/admin/vinyl/create">➕ 发起众筹</router-link>
         <router-link to="/admin/orders">📦 订单管理</router-link>
+        <router-link to="/admin/benefits">🎁 阶梯福利</router-link>
         <div class="admin-sidebar-title">版权管理</div>
         <router-link to="/admin/works">🎵 版权作品</router-link>
         <router-link to="/admin/revenue">💰 收益录入</router-link>
